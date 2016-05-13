@@ -1,0 +1,111 @@
+---
+title: "Final_quiz_predictionCodes"
+author: "wenting"
+date: "May 10, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Study Goal
+  is to predict the manner in which the participants did the exercise by using data from accelerometers on the belt, forearm, arm, and dumbell. 
+This is the "classe" variable in the training set.
+  
+### Step 1  read data
+```{r}
+setwd("/Users/Final_Assignment")
+training=read.csv("pml-training.csv",sep=",",head=T,stringsAsFactors = F,na.strings=c("","NA"))
+testing=read.csv("pml-testing.csv",sep=",",head=T,stringsAsFactors = F,na.strings=c("","NA"))
+dim(training)
+dim(testing)
+```
+
+### Step 2  clean data
+#### 2.1 remove variables with mostly missing values
+```{r}
+mostly_data<-apply(!is.na(training),2,sum)>19621
+training<-training[,mostly_data]
+testing<-testing[,mostly_data]
+```
+
+#### 2.2 remove column that is simply an index, timestamp
+```{r}
+training=training[,c(2,8:60)]
+testing=testing[,c(2,8:60)]
+dim(training)
+```
+
+#### 2.3 change variables to numeric and factor
+```{r,dependson="createData",fig.height=5,fig.width=5}
+for (i in 2:53){
+	training[,i]=as.numeric(as.character(training[,i]))
+}
+training$classe=as.factor(as.character(training$classe))
+training$user_name=as.factor(as.character(training$user_name))
+```
+
+### 3 - Training Models - RandomForest
+#### Setting the seed for reproducibility
+```{r}
+set.seed(1235)
+```
+
+#### load packages 
+```{r}
+library(caret)
+library(parallel)
+library(doParallel)
+cluster <- makeCluster(detectCores() - 1) # convention to leave 1 core for OS
+registerDoParallel(cluster)
+```
+
+#### 3.1 develop training model with 5-fold Cross-Validation
+```{r}
+fitControl <- trainControl(method = "cv",
+                           number = 5,
+                           allowParallel = TRUE)
+
+fit <- train(classe~., data=training,method="rf",trControl = fitControl,prox=TRUE)
+```
+
+#### stop cluster
+```{r}
+stopCluster(cluster)
+```
+
+#### 3.2 get model
+```{r}
+fit
+fit$resample
+fit$finalModel
+```
+
+#### 3.3 evaluate the final accuracy in cross validation
+```{r}
+confusionMatrix.train(fit)
+plot(fit,main="Accuracy by Predictor Count")
+varImpPlot(fit$finalModel, main="Variable Importance Plot: Random Forest")
+```
+
+### 4.  Predicting classe of the 20 Test Cases
+
+#### 4.1 prepare new test cleaned data
+```{r}
+
+for (i in 2:53){
+	testing[,i]=as.numeric(as.character(testing[,i]))
+}
+
+testing$user_name=as.factor(testing$user_name)
+```
+
+#### 4.2 Predicting new values
+
+```{r predForest, dependson="centers",fig.height=4,fig.width=4,cache=TRUE}
+pred <- predict(fit,testing)
+pred
+```
+#### Summary: the rf model was applied to predict/classy the final 20 test samples in quiz and it is 100% accuarate.
+
+
